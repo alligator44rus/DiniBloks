@@ -5,6 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    
+    <!-- Подключение манифеста -->
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- Иконки для iOS (Apple Touch Icon) -->
+    <link rel="apple-touch-icon" href="icon.png">
+    <meta name="theme-color" content="#0f172a">
+
     <title>Roblox Runner</title>
     <style>
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
@@ -94,17 +102,30 @@
 
 <script>
     // ==========================================
-    // PWA - ПЕРЕХВАТ УСТАНОВКИ
+    // PWA - SERVICE WORKER REGISTRATION
+    // ==========================================
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js')
+                .then(registration => {
+                    console.log('SW зарегистрирован: ', registration.scope);
+                })
+                .catch(error => {
+                    console.log('Ошибка регистрации SW: ', error);
+                });
+        });
+    }
+
+    // ==========================================
+    // PWA - INSTALL PROMPT LOGIC
     // ==========================================
     let deferredPrompt = null;
     const pwaBtn = document.getElementById('pwa-install-btn');
     const isMobileDevice = window.matchMedia('(pointer: coarse)').matches;
 
-    // Слушаем событие beforeinstallprompt (браузер готов предложить установку)
     window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         deferredPrompt = e;
-        // Показываем кнопку с задержкой 2 секунды, только если это телефон
         if (isMobileDevice) {
             setTimeout(() => {
                 pwaBtn.classList.add('show');
@@ -112,7 +133,6 @@
         }
     });
 
-    // Нажатие на кнопку установки
     pwaBtn.addEventListener('click', async () => {
         if (deferredPrompt) {
             deferredPrompt.prompt();
@@ -128,65 +148,19 @@
     });
 
     // ==========================================
-    // PWA - SERVICE WORKER
-    // ==========================================
-    if ('serviceWorker' in navigator) {
-        const swCode = `
-            self.addEventListener('install', function(event) { event.waitUntil(self.skipWaiting()); });
-            self.addEventListener('activate', function(event) { event.waitUntil(self.clients.claim()); });
-            self.addEventListener('fetch', function(event) { event.respondWith(fetch(event.request).catch(() => caches.match(event.request))); });
-        `;
-        const blob = new Blob([swCode], { type: 'application/javascript' });
-        const swUrl = URL.createObjectURL(blob);
-        navigator.serviceWorker.register(swUrl).then(reg => {
-            console.log('PWA: Service Worker зарегистрирован!');
-        }).catch(err => {
-            // Ошибка если не поддерживается (ПК или локальный файл)
-            console.log('PWA не поддерживается');
-        });
-    }
-
-    // ==========================================
-    // PWA - MANIFEST
-    // ==========================================
-    const manifestData = {
-        "name": "Roblox Runner",
-        "short_name": "RobloxRun",
-        "description": "Бесконечный раннер с магазином скинов",
-        "start_url": "/",
-        "display": "fullscreen",
-        "orientation": "landscape",
-        "background_color": "#0f172a",
-        "theme_color": "#0f172a",
-        "icons": [
-            { "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2334495e'/%3E%3Ctext x='50' y='65' text-anchor='middle' font-size='45' fill='%23f1c40f' font-family='sans-serif'%3E🛒%3C/text%3E%3C/svg%3E", "sizes": "192x192", "type": "image/svg+xml", "purpose": "any maskable" }
-        ]
-    };
-    const manifestBlob = new Blob([JSON.stringify(manifestData)], { type: 'application/json' });
-    const manifestUrl = URL.createObjectURL(manifestBlob);
-    const linkManifest = document.createElement('link');
-    linkManifest.rel = 'manifest';
-    linkManifest.href = manifestUrl;
-    document.head.appendChild(linkManifest);
-
-    // ==========================================
-    // ЛОГИКА МАГАЗИНА
+    // ЛОГИКА МАГАЗИНА И ИГРЫ (Без изменений)
     // ==========================================
     const shopIconBtn = document.getElementById('shopIconBtn');
-    
     shopIconBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         if (!isShopOpen) { isShopOpen = true; shopScrollY = 0; } else { isShopOpen = false; }
     });
-
     shopIconBtn.addEventListener('touchstart', (e) => {
         e.preventDefault(); e.stopPropagation();
         if (!isShopOpen) { isShopOpen = true; shopScrollY = 0; } else { isShopOpen = false; }
     });
 
-    // ==========================================
     // FULLSCREEN
-    // ==========================================
     const fsBtn = document.getElementById('fullscreenBtn');
     const container = document.getElementById('gameContainer');
     fsBtn.addEventListener('click', function(e) {
@@ -200,9 +174,7 @@
         else { document.exitFullscreen(); }
     });
 
-    // ==========================================
-    // ИГРОВОЙ ДВИЖОК
-    // ==========================================
+    // GAME ENGINE
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     const coinScoreElement = document.getElementById('coinScore');
@@ -217,12 +189,8 @@
     let shopScrollY = 0;
     let framesSinceLastObstacle = 100;
 
-    // Переменные для таймера
     const megaTimer = { x: 690, y: 25, radius: 18, timer: 0, cooldown: 600, ready: false };
     
-    // ==========================================
-    // ШКАЛА ОЧКОВ И МОНЕТ
-    // ==========================================
     const scoreBar = { current: 0, maxVisual: 1000000000, x: 20, y: 30, w: 150, h: 14 };
     const coinBar = { x: 630, y: 30, w: 150, h: 14, maxVisual: 1000000000 };
     function formatNumber(num) { return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " "); }
@@ -260,9 +228,6 @@
         ctx.fillText(formatNumber(coins), x + w/2, y + h/2);
     }
 
-    // ==========================================
-    // ДЕНЬ И НОЧЬ
-    // ==========================================
     let isNight = false; let cycleTimer = 0;
     const DAY_DURATION = 15000; const NIGHT_DURATION = 5000;
     const sun = { x: 650, y: 70, radius: 35 }; const moon = { x: 700, y: 60, radius: 30 };
@@ -271,9 +236,6 @@
     const stars = [];
     for (let i = 0; i < 80; i++) { stars.push({ x: Math.random() * 800, y: Math.random() * (GROUND_Y - 50), r: 0.5 + Math.random() * 1.5, twinkle: Math.random() * Math.PI * 2 }); }
 
-    // ==========================================
-    // СИСТЕМА СКИНОВ
-    // ==========================================
     const skins = [
         { id: 0, name: "Классический", price: 0, owned: true, equipped: true, colors: { skin: '#f5cba7', shirt: '#3498db', pants: '#f4d03f' } },
         { id: 1, name: "Скелет", price: 150, owned: false, equipped: false, colors: { skin: '#ecf0f1', shirt: '#bdc3c7', pants: '#95a5a6' } },
@@ -342,10 +304,6 @@
             ctx.textAlign = 'left';
         });
         ctx.restore();
-    }
-
-    function handleShopClick(mouseX, mouseY) {
-        return false;
     }
 
     canvas.addEventListener('wheel', (e) => {
